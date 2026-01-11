@@ -1,7 +1,9 @@
 from flask import Flask, request, render_template_string
 from PIL import Image
 import pytesseract
-import re
+import io
+
+from pair_detector import detect_pair
 
 app = Flask(__name__)
 
@@ -9,72 +11,73 @@ HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>TradingView Signal Bot</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: Arial; padding: 20px; background: #111; color: #eee; }
-        button { padding: 10px; font-size: 16px; }
-        input { margin-bottom: 10px; }
-        .box { background: #222; padding: 15px; border-radius: 8px; }
-    </style>
+<title>SignalSnap FX</title>
+<style>
+body {
+    background:#0b1220;
+    color:white;
+    font-family:Arial;
+    display:flex;
+    justify-content:center;
+    margin-top:80px;
+}
+.box {
+    background:#111a2e;
+    padding:25px;
+    border-radius:12px;
+    width:320px;
+    text-align:center;
+}
+button {
+    background:#1ed760;
+    border:none;
+    padding:10px;
+    width:100%;
+    border-radius:6px;
+    font-weight:bold;
+}
+</style>
 </head>
 <body>
+<div class="box">
+<h2>📊 SignalSnap FX</h2>
 
-<h2>📈 TradingView Signal Bot</h2>
-
-<form method="POST" enctype="multipart/form-data">
-    <input type="file" name="image" accept="image/*" required><br>
-    <button type="submit">Analyze</button>
+<form method="post" enctype="multipart/form-data">
+<input type="file" name="image" required><br><br>
+<button type="submit">Analyze Screenshot</button>
 </form>
 
 {% if result %}
-<div class="box">
-<pre>{{ result }}</pre>
-</div>
+<hr>
+<p><b>Pair:</b> {{ result.pair }}</p>
+<p><b>Signal:</b> {{ result.signal }}</p>
+<p><b>Price:</b> {{ result.price }}</p>
+<p><b>Stop Loss:</b> {{ result.sl }}</p>
+<p><b>Take Profit:</b> {{ result.tp }}</p>
 {% endif %}
-
+</div>
 </body>
 </html>
 """
 
-def extract_rsi(text):
-    match = re.search(r'RSI[^0-9]*([0-9]+\\.?[0-9]*)', text, re.IGNORECASE)
-    if match:
-        return float(match.group(1))
-    return None
-
-def analyze_rsi(rsi, price=1.0):
-    if rsi is None:
-        return "RSI not detected"
-
-    if rsi < 30:
-        signal = "BUY"
-        sl = price - 0.0020
-        tp = price + 0.0040
-    elif rsi > 70:
-        signal = "SELL"
-        sl = price + 0.0020
-        tp = price - 0.0040
-    else:
-        signal = "HOLD"
-        sl = tp = None
-
-    return f"""RSI: {rsi}
-Signal: {signal}
-Stop Loss: {sl if sl else 'N/A'}
-Take Profit: {tp if tp else 'N/A'}"""
-
 @app.route("/", methods=["GET", "POST"])
-def home():
+def index():
     result = None
 
     if request.method == "POST":
-        file = request.files.get("image")
-        if file:
-            img = Image.open(file)
-            text = pytesseract.image_to_string(img)
-            rsi = extract_rsi(text)
-            result = analyze_rsi(rsi)
+        file = request.files["image"]
+        image = Image.open(io.BytesIO(file.read()))
+
+        text = pytesseract.image_to_string(image)
+        pair = detect_pair(text)
+
+        result = {
+            "pair": pair,
+            "signal": "BUY",
+            "price": "0.24",
+            "sl": "0.238",
+            "tp": "0.244"
+        }
 
     return render_template_string(HTML, result=result)
 
