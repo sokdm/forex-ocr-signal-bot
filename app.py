@@ -1,36 +1,29 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, jsonify, render_template
+import os
 
 app = Flask(__name__)
 
-UPLOAD_PAGE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>SignalSnap FX</title>
-</head>
-<body>
-    <h2>Upload chart screenshot</h2>
-    <form method="POST" action="/analyze" enctype="multipart/form-data">
-        <input type="file" name="image" accept="image/*" required>
-        <br><br>
-        <button type="submit">Analyze</button>
-    </form>
-</body>
-</html>
-"""
-
 @app.route("/")
-def home():
-    return render_template_string(UPLOAD_PAGE)
+def index():
+    return render_template("index.html")
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    file = request.files.get("image")
-    if not file:
-        return "No image uploaded"
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
 
-    return "Image received ✅ (analysis coming next)"
+    image = request.files["image"]
+
+    # ✅ MOCK RESULT (replace later with real OCR/RSI logic)
+    result = {
+        "pair": "UNKNOWN",
+        "signal": "BUY",
+        "price": "0.24",
+        "stop_loss": "0.238",
+        "take_profit": "0.244"
+    }
+
+    return jsonify(result)
 
 if __name__ == "__main__":
-    import os
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
