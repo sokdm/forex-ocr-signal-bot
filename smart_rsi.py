@@ -41,3 +41,19 @@ def smart_rsi_signal(prices):
         "strength": "WEAK",
         "rsi": rsi
     }
+def analyze_image(image_path=None):
+    # Placeholder logic (can be improved later)
+    dummy_prices = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    rsi = calculate_rsi(dummy_prices)
+
+    if rsi < 30:
+        signal = "BUY"
+    elif rsi > 70:
+        signal = "SELL"
+    else:
+        signal = "HOLD"
+
+    return {
+        "rsi": rsi,
+        "signal": signal
+    }
