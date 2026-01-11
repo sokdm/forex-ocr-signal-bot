@@ -1,10 +1,11 @@
 from flask import Flask, request, jsonify, render_template
 import os
+from smart_rsi import analyze_image
 
 app = Flask(__name__)
 
 @app.route("/")
-def index():
+def home():
     return render_template("index.html")
 
 @app.route("/analyze", methods=["POST"])
@@ -14,16 +15,16 @@ def analyze():
 
     image = request.files["image"]
 
-    # ✅ MOCK RESULT (replace later with real OCR/RSI logic)
-    result = {
-        "pair": "UNKNOWN",
-        "signal": "BUY",
-        "price": "0.24",
-        "stop_loss": "0.238",
-        "take_profit": "0.244"
-    }
+    try:
+        result = analyze_image(image)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "error": "Analysis failed",
+            "details": str(e)
+        }), 500
 
-    return jsonify(result)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
