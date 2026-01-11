@@ -1,74 +1,70 @@
-from flask import Flask, jsonify
-import os
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# =========================
-# RSI CALCULATION
-# =========================
 def calculate_rsi(prices, period=14):
-    if len(prices) < period + 1:
-        return 50.0  # neutral fallback
-
     gains = []
     losses = []
 
     for i in range(1, len(prices)):
-        change = prices[i] - prices[i - 1]
-        if change > 0:
-            gains.append(change)
+        diff = prices[i] - prices[i - 1]
+        if diff > 0:
+            gains.append(diff)
             losses.append(0)
         else:
             gains.append(0)
-            losses.append(abs(change))
+            losses.append(abs(diff))
 
     avg_gain = sum(gains[-period:]) / period
     avg_loss = sum(losses[-period:]) / period
 
     if avg_loss == 0:
-        return 100.0
+        return 100
 
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return round(rsi, 2)
+    return round(100 - (100 / (1 + rs)), 2)
 
 
-# =========================
-# ANALYSIS LOGIC
-# =========================
-def analyze_image(image_path=None):
-    # TEMP dummy data (replace later with OCR)
-    prices = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    data = request.get_json()
+    prices = data.get("prices")
+
+    if not prices or len(prices) < 15:
+        return jsonify({"error": "Not enough prices"}), 400
 
     rsi = calculate_rsi(prices)
+    entry = prices[-1]
 
-    if rsi < 30:
-        signal = "BUY"
-    elif rsi > 70:
+    if rsi > 70:
         signal = "SELL"
+        tp = round(entry - 0.003, 3)
+        sl = round(entry + 0.002, 3)
+    elif rsi < 30:
+        signal = "BUY"
+        tp = round(entry + 0.003, 3)
+        sl = round(entry - 0.002, 3)
     else:
         signal = "HOLD"
+        tp = sl = entry
 
-    return {
+    strength = "STRONG" if rsi > 75 or rsi < 25 else "WEAK"
+
+    return jsonify({
+        "signal": signal,
+        "entry": entry,
+        "tp": tp,
+        "sl": sl,
         "rsi": rsi,
-        "signal": signal
-    }
+        "strength": strength
+    })
 
 
-# =========================
-# API ROUTE
-# =========================
-@app.route("/analyze", methods=["GET"])
-def analyze():
-    result = analyze_image()
-    return jsonify(result)
+@app.route("/")
+def home():
+    return "Forex OCR Signal API is LIVE"
 
 
-# =========================
-# START SERVER
-# =========================
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000))
-    )
+    import os
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
