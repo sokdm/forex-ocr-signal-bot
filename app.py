@@ -2,7 +2,28 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-def calculate_rsi(prices, period=14):
+@app.route("/", methods=["GET"])
+def home():
+    return "Forex OCR Signal API is LIVE"
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    data = request.get_json(silent=True)
+
+    if not data:
+        return jsonify({"error": "JSON body required"}), 400
+
+    if "prices" not in data:
+        return jsonify({"error": "prices array missing"}), 400
+
+    prices = data["prices"]
+
+    if not isinstance(prices, list):
+        return jsonify({"error": "prices must be a list"}), 400
+
+    if len(prices) < 14:
+        return jsonify({"error": "Not enough prices (minimum 14)"}), 400
+
     gains = []
     losses = []
 
@@ -15,56 +36,29 @@ def calculate_rsi(prices, period=14):
             gains.append(0)
             losses.append(abs(diff))
 
-    avg_gain = sum(gains[-period:]) / period
-    avg_loss = sum(losses[-period:]) / period
+    avg_gain = sum(gains) / len(gains)
+    avg_loss = sum(losses) / len(losses)
 
     if avg_loss == 0:
-        return 100
-
-    rs = avg_gain / avg_loss
-    return round(100 - (100 / (1 + rs)), 2)
-
-
-@app.route("/analyze", methods=["POST"])
-def analyze():
-    data = request.get_json()
-    prices = data.get("prices")
-
-    if not prices or len(prices) < 15:
-        return jsonify({"error": "Not enough prices"}), 400
-
-    rsi = calculate_rsi(prices)
-    entry = prices[-1]
+        rsi = 100
+    else:
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
 
     if rsi > 70:
         signal = "SELL"
-        tp = round(entry - 0.003, 3)
-        sl = round(entry + 0.002, 3)
     elif rsi < 30:
         signal = "BUY"
-        tp = round(entry + 0.003, 3)
-        sl = round(entry - 0.002, 3)
     else:
         signal = "HOLD"
-        tp = sl = entry
-
-    strength = "STRONG" if rsi > 75 or rsi < 25 else "WEAK"
 
     return jsonify({
-        "signal": signal,
-        "entry": entry,
-        "tp": tp,
-        "sl": sl,
-        "rsi": rsi,
-        "strength": strength
+        "status": "success",
+        "pair": "EURUSD",
+        "timeframe": "15m",
+        "rsi": round(rsi, 2),
+        "signal": signal
     })
 
-
-@app.route("/")
-def home():
-    return "Forex OCR Signal API is LIVE"
-
-
 if __name__ == "__main__":
-    import os
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    app.run(host="0.0.0.0", port=10000)
