@@ -6,7 +6,9 @@ import io
 from pair_detector import detect_pair
 
 app = Flask(__name__)
-
+@app.route("/", methods=["GET"])
+def home():
+    return render_template_string(HTML)
 HTML = """
 <!DOCTYPE html>
 <html>
