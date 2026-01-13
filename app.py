@@ -1,31 +1,32 @@
 from flask import Flask, render_template, request, redirect, session, url_for
+from auth import login_required
+from werkzeug.utils import secure_filename
 import sqlite3, os
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database.db")
-
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-
-# ---------- DATABASE ----------
+# ======================
+# DATABASE
+# ======================
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect("users.db")
     conn.row_factory = sqlite3.Row
     return conn
 
-
-# ---------- ROOT ----------
+# ======================
+# HOME
+# ======================
 @app.route("/")
 def home():
-    return redirect(url_for("login"))
+    return redirect("/login")
 
-
-# ---------- SIGNUP ----------
+# ======================
+# SIGNUP
+# ======================
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
@@ -40,14 +41,14 @@ def signup():
             )
             db.commit()
         except:
-            return "User already exists"
+            return "Email already exists"
 
-        return redirect(url_for("login"))
+        return redirect("/login")
 
     return render_template("signup.html")
-
-
-# ---------- LOGIN ----------
+# ======================
+# LOGIN
+# ======================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -62,79 +63,92 @@ def login():
 
         if user:
             session["user_id"] = user["id"]
-            return redirect(url_for("dashboard"))
+            return redirect("/dashboard")
 
         return "Invalid credentials"
 
     return render_template("login.html")
-
-
-# ---------- LOGOUT ----------
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
-
-
-# ---------- DASHBOARD ----------
+# ======================
+# DASHBOARD (HISTORY)
+# ======================
 @app.route("/dashboard")
+@login_required
 def dashboard():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
     db = get_db()
     trades = db.execute(
-        "SELECT * FROM trades WHERE user_id=? ORDER BY id DESC",
+        "SELECT pair, signal, entry, tp, sl, strength, confidence, explanation "
+        "FROM trades WHERE user_id=? ORDER BY id DESC",
         (session["user_id"],)
     ).fetchall()
+    db.close()
 
     return render_template("dashboard.html", trades=trades)
 
-
-# ---------- IMAGE UPLOAD ----------
-@app.route("/upload", methods=["POST"])
+# ======================
+# UPLOAD + ANALYZE
+# ======================
+@app.route("/upload", methods=["GET", "POST"])
+@login_required
 def upload():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
+    if request.method == "POST":
+        image = request.files["image"]
+        filename = secure_filename(image.filename)
+        path = os.path.join(UPLOAD_FOLDER, filename)
+        image.save(path)
 
-    image = request.files["image"]
-    filename = image.filename
-    path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    image.save(path)
+        # ===== ANALYSIS (PLACEHOLDER, OCR LATER) =====
+        result = {
+            "pair": "EURUSD",
+            "signal": "SELL",
+            "entry": 1.166,
+            "tp": 1.163,
+            "sl": 1.168,
+            "strength": "STRONG",
+            "confidence": 85,
+            "explanation": "RSI overbought, bearish momentum confirmed. RR 1:2"
+        }
 
-    # ----- FAKE ANALYSIS (FOR NOW) -----
-    pair = "EURUSD"
-    entry = 1.166
-    tp = 1.163
-    sl = 1.168
-    rsi = 72.5
+        return render_template("result.html", result=result)
 
-    if rsi > 70:
-        signal = "SELL"
-        strength = "STRONG"
-        confidence = 85
-        explanation = "RSI above 70 indicates overbought market"
-    else:
-        signal = "BUY"
-        strength = "WEAK"
-        confidence = 40
-        explanation = "No strong confirmation"
+    return render_template("upload.html")
 
+# ======================
+# SAVE RESULT → DASHBOARD
+# ======================
+@app.route("/save_trade", methods=["POST"])
+@login_required
+def save_trade():
     db = get_db()
     db.execute("""
-        INSERT INTO trades
-        (user_id, pair, signal, entry, tp, sl, strength, confidence, explanation)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO trades
+    (user_id, pair, signal, entry, tp, sl, strength, confidence, explanation)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        session["user_id"], pair, signal,
-        entry, tp, sl,
-        strength, confidence, explanation
+        session["user_id"],
+        request.form["pair"],
+        request.form["signal"],
+        request.form["entry"],
+        request.form["tp"],
+        request.form["sl"],
+        request.form["strength"],
+        request.form["confidence"],
+        request.form["explanation"]
     ))
     db.commit()
+    db.close()
 
-    return redirect(url_for("dashboard"))
+    return redirect("/dashboard")
 
+# ======================
+# LOGOUT
+# ======================
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
-# ---------- RUN LOCAL ----------
+# ======================
+# RUN
+# ======================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000, debug=True)
