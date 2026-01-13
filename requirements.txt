@@ -1,4 +1,5 @@
-Flask
-gunicorn
-pytesseract
-Pillow
+flask
+easyocr
+pillow
+torch
+opencv-python-headless

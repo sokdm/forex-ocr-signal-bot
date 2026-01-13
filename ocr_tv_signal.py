@@ -1,56 +1,43 @@
-import pytesseract
-from PIL import Image
+import easyocr
 import re
+from PIL import Image
+
+# Initialize once (VERY IMPORTANT)
+reader = easyocr.Reader(['en'], gpu=False)
 
 def analyze_image(image_path):
-    # ---------- OCR ----------
-    img = Image.open(image_path)
-    text = pytesseract.image_to_string(img)
+    try:
+        result = reader.readtext(image_path, detail=0)
+        text = " ".join(result).upper()
+    except Exception as e:
+        return [{
+            "pair": "ERROR",
+            "signal": "-",
+            "entry": "-",
+            "tp": "-",
+            "sl": "-",
+            "strength": "WEAK",
+            "confidence": 0,
+            "explanation": f"OCR failed: {str(e)}",
+            "risk": "-"
+        }]
 
-    text = text.upper()
-
-    # ---------- PAIR ----------
+    # ---- PAIR ----
     pair_match = re.search(r"(EURUSD|GBPUSD|USDJPY|XAUUSD|AUDUSD)", text)
     pair = pair_match.group(1) if pair_match else "UNKNOWN"
 
-    # ---------- SIGNAL ----------
+    # ---- SIGNAL ----
     signal = "BUY" if "BUY" in text else "SELL" if "SELL" in text else "-"
 
-    # ---------- NUMBERS ----------
+    # ---- PRICES ----
     numbers = re.findall(r"\d+\.\d+", text)
-
     entry = float(numbers[0]) if len(numbers) > 0 else "-"
     tp = float(numbers[1]) if len(numbers) > 1 else "-"
     sl = float(numbers[2]) if len(numbers) > 2 else "-"
 
-    # ---------- STRENGTH ----------
-    strength_score = 0
-    explanation = []
-
-    if signal in ["BUY", "SELL"]:
-        strength_score += 30
-        explanation.append("Clear trade direction")
-
-    if entry != "-" and tp != "-" and sl != "-":
-        strength_score += 30
-        explanation.append("Valid entry, TP and SL")
-
-    rr = None
-    if entry != "-" and tp != "-" and sl != "-":
-        try:
-            risk = abs(entry - sl)
-            reward = abs(tp - entry)
-            rr = round(reward / risk, 2)
-            if rr >= 2:
-                strength_score += 25
-                explanation.append(f"Good RR {rr}")
-        except:
-            pass
-
-    # ---------- CONFIDENCE ----------
-    confidence = min(95, strength_score)
-
-    strength = "STRONG" if confidence >= 70 else "MEDIUM" if confidence >= 50 else "WEAK"
+    # ---- CONFIDENCE ----
+    confidence = 70 if signal != "-" and entry != "-" else 40
+    strength = "STRONG" if confidence >= 70 else "MEDIUM"
 
     return [{
         "pair": pair,
@@ -60,6 +47,6 @@ def analyze_image(image_path):
         "sl": sl,
         "strength": strength,
         "confidence": confidence,
-        "explanation": ", ".join(explanation),
-        "risk": f"RR {rr}" if rr else "RR unknown"
+        "explanation": "Image analyzed successfully",
+        "risk": "-"
     }]
